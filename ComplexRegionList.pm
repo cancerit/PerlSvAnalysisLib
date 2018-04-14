@@ -3,7 +3,8 @@ use warnings FATAL => 'all';
 
 use List::Util qw(min max);
 
-use lib '/nfs/users/nfs_y/yl3/programs/scripts/pancan_related_scripts';
+use File::Basename;
+use lib dirname($0);
 use ComplexRegion;
 
 package ComplexRegionList;

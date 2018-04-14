@@ -1,7 +1,8 @@
 use strict;
 use warnings FATAL => 'all';
 
-use lib '/nfs/users/nfs_y/yl3/programs/scripts/pancan_related_scripts/';
+use File::Basename;
+use lib dirname($0);
 use CopyNumberSegmentEnd;
 
 package CopyNumberSegment;

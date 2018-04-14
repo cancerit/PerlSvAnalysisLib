@@ -1,7 +1,8 @@
 use strict;
 use warnings FATAL => 'all';
 
-use lib '/nfs/users/nfs_y/yl3/programs/scripts/pancan_related_scripts/';
+use File::Basename;
+use lib dirname($0);
 use CopyNumberSegmentArray;
 use CopyNumberSegment;
 use Rearrangement;
@@ -1147,6 +1148,7 @@ sub normalise_sv_clustering {
     $self->rescue_shards_and_balanced_bkpt_footprints(%params);  # Rescue shard or balanced breakpoint footprints
     $self->rescue_inversion_shards(%params);
     $self->normalise_simple_dels_and_tds_clusters(%params);
+    $self->split_unconnected_footprints();
 }
 
 #
@@ -1446,6 +1448,77 @@ sub print_classification_data {
         $cur_component = RearrangementConnectedComponent->new(%params, rgs => $self->{rgs_of_event}->{$event_id});
         $event_type = $cur_component->naive_classification(%params);
         print_rgs_of_event($sample_name, $event_id, $event_type, \%params, @cur_rgs);
+    }
+}
+
+sub split_unconnected_footprints {
+    # For each cluster, split sets of footprints that are not connected to each
+    # other.
+
+    my $self = shift;
+
+    # Helper function: go through all footprints and find connected components.
+    # Returns an array of arrays of footprints. 
+    sub get_footprint_components_of_cluster {
+        my $cluster = shift;
+
+        # Helper function: DFS of connected footprint components
+        my %fp_is_visited = ();
+        $fp_is_visited{$_} = 0 for $cluster->footprints_array();
+        my @footprint_sets;
+        my $cur_set;
+        sub footprint_dfs {
+            my $fp = shift;
+            my $cur_component = shift;
+            my $fp_is_visited = shift;
+            if ($fp_is_visited->{$fp}) {
+                return;
+            } else {
+                $fp_is_visited->{$fp} = 1;
+                push @{$cur_component}, $fp;
+                for ($fp->neighbour_footprints) {
+                    footprint_dfs($_, $cur_component, $fp_is_visited);
+                }
+            }
+        }
+
+        # Compute connected components
+        for ($cluster->footprints_array) {
+            if (!$fp_is_visited{$_}) {
+                push @footprint_sets, [];
+                $cur_set = $footprint_sets[-1];
+                footprint_dfs($_, $cur_set, \%fp_is_visited);
+            }
+        }
+
+        return @footprint_sets;
+    }
+
+    # Helper function: go through all clusters and split them.
+    sub split_cluster_by_unconnected_footprints {
+        my $genome = shift;
+        my $cluster = shift;
+        my @footprint_sets = get_footprint_components_of_cluster($cluster);
+        my $new_cluster_idx = 0;
+
+        # If there are more than one connected components, then split them.
+        if (@footprint_sets > 1) {
+            for (@footprint_sets) {
+                while (exists($genome->{rg_clusters}->{$cluster->id . "." . $new_cluster_idx})) {
+                    $new_cluster_idx++;
+                }
+                $genome->create_sv_cluster_from_footprints(
+                    $cluster->id . "." . $new_cluster_idx,
+                    $_
+                );
+                $new_cluster_idx++;
+            }
+            delete $genome->{rg_clusters}->{$cluster->id};
+        }
+    }
+
+    for my $cluster (values(%{$self->{rg_clusters}})) {
+        split_cluster_by_unconnected_footprints($self, $cluster);
     }
 }
 

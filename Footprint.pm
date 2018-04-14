@@ -228,6 +228,19 @@ sub to_s {
     );
 }
 
+sub neighbour_footprints {
+    my $self = shift;
+    my @rg_ends = $self->rg_ends_array();
+    my %neighbours;
+    for (@rg_ends) {
+        if ($_->mate->footprint eq $self) {
+            next;
+        }
+        $neighbours{$_->mate->footprint} = $_->mate->footprint;
+    }
+    return values(%neighbours);
+}
+
 
 #
 # Interpretation of footprints
