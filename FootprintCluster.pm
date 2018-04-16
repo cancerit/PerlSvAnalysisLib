@@ -497,8 +497,8 @@ sub cluster_classification {
             }  # End of clusters with shard cycles and/or shard chains
         }  # End of clusters with shard footprints
         elsif (@bal_footprints) {
-            # There are balanced breakpoints - test if the entire event is just
-            # balanced breakpoint chain or cluster.
+            # There are balanced breakpoints but no shards - test if the entire
+            # event is just balanced breakpoint chain or cluster.
             my $balanced_type = ($bal_footprints[0])->detailed_type(%params);
             if ($balanced_type =~ /chromoplexy_(cycle|chain):(\d+)/) {
                 # If the event is a pure balanced breakpoint chain, then the
@@ -513,8 +513,13 @@ sub cluster_classification {
                     and $2 == $self->size - 2
                     and scalar(grep { !($_->is_balanced_type(%params)) and $_->size == 1 } @footprints) == 2
                 ) {
-                    # Two single-breakpoint footprints connected by shards in a chain
-                    return $balanced_type;
+                    # Two single-breakpoint footprints connected by shards in a chain. 
+                    if ($2 == 1) {  # chromoplexy_chain:1
+                        return "split_translocation";
+                    }
+                    else {  # chromoplexy_chain:x, where x > 1
+                        return $balanced_type;
+                    }
                 }
                 else {
                     return "complex_unclear";
