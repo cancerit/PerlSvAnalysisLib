@@ -424,6 +424,7 @@ sub normalise_single_bp_segments {
 sub preprocess_rearrangement_and_copy_number_data {
     my $self = shift;
     my %params = @_;
+    print STDERR scalar(keys $self->rg_of_id) . "\n";
     $self->sort_segments;
 
     my $changed = 1;
@@ -460,6 +461,7 @@ sub preprocess_rearrangement_and_copy_number_data {
         $changed = 1 if $_;
     }
 
+    print STDERR scalar(keys $self->rg_of_id) . "\n";
     return (
         iter => $iterations,
         cn_removed => $cn_removed,
@@ -1465,29 +1467,39 @@ sub split_unconnected_footprints {
         # Helper function: DFS of connected footprint components
         my %fp_is_visited = ();
         $fp_is_visited{$_} = 0 for $cluster->footprints_array();
+        
+        # Initialize the first footprint set
         my @footprint_sets;
         my $cur_set;
-        sub footprint_dfs {
-            my $fp = shift;
-            my $cur_component = shift;
-            my $fp_is_visited = shift;
-            if ($fp_is_visited->{$fp}) {
-                return;
-            } else {
-                $fp_is_visited->{$fp} = 1;
-                push @{$cur_component}, $fp;
-                for ($fp->neighbour_footprints) {
-                    footprint_dfs($_, $cur_component, $fp_is_visited);
-                }
-            }
-        }
+        my @queue_of_footprints_in_cur_set = ();  # Use a FIFO-Q to avoid recursion
+        my $fp;
 
-        # Compute connected components
-        for ($cluster->footprints_array) {
-            if (!$fp_is_visited{$_}) {
+        for $fp ($cluster->footprints_array) {
+            if (!$fp_is_visited{$fp}) {
+                # Mark footprint as visited and initialise a new set
+                $fp_is_visited{$fp} = 1;
                 push @footprint_sets, [];
                 $cur_set = $footprint_sets[-1];
-                footprint_dfs($_, $cur_set, \%fp_is_visited);
+                push @{$cur_set}, $fp;
+
+                # Push all unvisited neighbours to the queue to be visited
+                push(
+                    @queue_of_footprints_in_cur_set,
+                    grep {!$fp_is_visited{$_}} $fp->neighbour_footprints
+                );
+            }
+
+            # Go through the footprints in the current footprint set
+            while (@queue_of_footprints_in_cur_set) {
+                $fp = shift @queue_of_footprints_in_cur_set;
+                if (!$fp_is_visited{$fp}) {
+                    $fp_is_visited{$fp} = 1;
+                    push @{$cur_set}, $fp;
+                    push(
+                        @queue_of_footprints_in_cur_set,
+                        grep {!$fp_is_visited{$_}} $fp->neighbour_footprints
+                    );
+                }
             }
         }
 
